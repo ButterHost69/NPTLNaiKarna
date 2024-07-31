@@ -1,7 +1,7 @@
 import re
 import time
 import json
-
+# import strconv  
 import re._constants
 from selenium import webdriver
 from selenium.webdriver.firefox.options import Options
@@ -20,17 +20,22 @@ from selenium.webdriver.common.keys import Keys
     
 
 def submit_answer(course_details, user_details):
-    # Google Signin Doesnt Work
-    # So We will Have to redirect Through Stackoverflow
+    
     GOOGLE_SIGN_IN_BTN_ID = "GoogleExchange"
     GOOGLE_SIGN_IN_EMAIL_INPUT_CLASSNAME = "whsOnd.zHQkBf" 
     GOOGLE_SIGN_IN_PASSWORD_INPUT_CLASSNAME = "whsOnd.zHQkBf" 
-    WEEK_LIKE_DIVS_CLASSNAME = "unit_heading"
+    WEEK_LIKE_DIVS_CLASSNAME = "unit_navbar"
 
     # WEEK_ASSESSMENT_COMPLETED_IMG_CLASSNAME = "assessment_180"
     WEEK_ASSESSMENT_COMPLETED_IMG_CLASSNAME = "gcb-progress-icon.gcb-progress-icon-holder-completed"
     WEEK_ASSESSMENT_CLASSNAME = "gcb-left-activity-title-with-progress.gcb-nav-pa"
     
+    answer_options_to_number = {
+        "a":0,
+        "b":1,
+        "c":2,
+        "d":3
+    }
 
     options = Options()
     # options.add_argument('--headless=new')
@@ -98,57 +103,85 @@ def submit_answer(course_details, user_details):
         sign_in_email_input = browser.find_element(By.CLASS_NAME, GOOGLE_SIGN_IN_PASSWORD_INPUT_CLASSNAME)
         sign_in_email_input.send_keys(user_details["password"])
         sign_in_email_input.send_keys(Keys.ENTER)
-        time.sleep(60)
+        time.sleep(30)
         # lol = input("Done?")
 
-        weeks_parent_div = browser.find_element(By.XPATH, "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div")
-        all_week_like_divs = weeks_parent_div.find_elements(By.CLASS_NAME, WEEK_LIKE_DIVS_CLASSNAME)
+        # weeks_parent_div = browser.find_element(By.XPATH, "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div")
+        all_week_like_divs = browser.find_elements(By.CLASS_NAME, WEEK_LIKE_DIVS_CLASSNAME)
         weeks_div = []
-        # assessment_links
         quiz_not_done = []
-        for div in all_week_like_divs:
-            # Check For all <a> Tags
+        # assessment_links
+
+        # Remove THis Latter
+        week0 = "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div/" + "div[3]" + "/ul/li/div"
+        week1 = "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div/" + "div[4]" + "/ul/li[8]/div"
+        week2 = "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div/" + "div[5]" + "/ul/li[7]/div"        
+        
+        # weeks_divs_count = 2
+
+        # Week _ : Starts from div[3]
+        itr = 3
+        # Last 2 Divs are Text Transcripts and Books
+        while(itr < len(all_week_like_divs) - 3):
+            all_week_like_divs[itr].click()
+            scroll_origin = ScrollOrigin.from_element(all_week_like_divs[itr], 100)
+            actions.scroll_from_origin(scroll_origin, 0, 100).perform()
+            time.sleep(3)
             try:
-                regex_exp = re.compile(r'\bWeek \d+\b')
-                week = div.find_element(By.TAG_NAME, "a")
-                if regex_exp.search(week.text):
-                    weeks_div.append(week)
-                    week.click()
-                    
-                    time.sleep(2)
-                    
-                    # Remove THis Latter
-                    week0 = "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div/div[3]/ul/li/div"
-                    week1 = "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div/div[4]/ul/li[8]/div"
-                    week2 = "/html/body/div[11]/div[1]/div/div[2]/div[1]/div[3]/div/div[5]/ul/li[7]/div"
-                    
-                    quiz_status = div.find_element(By.CLASS_NAME, WEEK_ASSESSMENT_CLASSNAME)
+                INSIDE_WEEK_CLASS_NO = "gcb-left-activity-title-with-progress.gcb-nav-pa"
+                lecture_and_quiz = all_week_like_divs[itr].find_elements(By.CLASS_NAME, INSIDE_WEEK_CLASS_NO)
+                
+                # Check If Last Element is the Quiz
+                last_element = lecture_and_quiz[-1]
+                last_element_text_withweekno = last_element.find_element(By.TAG_NAME, "a").text
+                last_element_text = last_element_text_withweekno.split(" ")[0]
+                if  last_element_text == "Quiz:":
                     try:
-                        quiz_status.find_element(By.CLASS_NAME, WEEK_ASSESSMENT_COMPLETED_IMG_CLASSNAME)
-                        print(f"{week.text} Done")
-
+                        icon = last_element.find_element(By.TAG_NAME, "div").find_element(By.CLASS_NAME, WEEK_ASSESSMENT_COMPLETED_IMG_CLASSNAME)
+                        print(f"Done: {last_element_text}")
                     except:
-                        quiz_not_done.append(week.text.replace(" ", ""))
-                        print(f"{week.text} Not Done")
-                    
+                        quiz_not_done.append(f"{last_element_text_withweekno}")
+
             except Exception as e:
-                # print(e)
-                pass
-        print(weeks_div)
+                print(e)
+
+            itr += 1
         print(quiz_not_done)
-
-        answered_weeks = course_details['answer'].keys()
-
-        for quiz in quiz_not_done:
+        
+        answered_weeks = course_details['answers'].keys()
+        formatted_quiz_not_done = ["week" + str(x[-1]) for x in quiz_not_done]
+        for quiz in formatted_quiz_not_done:
             if quiz in answered_weeks:
                 browser.get(course_details['week_assessment_template'] + quiz.replace("week", ""))
                 time.sleep(5)
-                heading = browser.find_element(By.XPATH, "/html/body/div[11]/div[1]/div/div[2]/div[4]/div[2]/div[1]/h1")
-                scroll_origin = ScrollOrigin.from_element(heading, 100)
-                actions.scroll_from_origin(scroll_origin, 0, 1000).perform()
+                # heading = browser.find_element(By.XPATH, "/html/body/div[11]/div[1]/div/div[2]/div[4]/div[2]/div[1]/h1")
+                QUESTION_CLASSNAME = "qt-mc-question.qt-embedded"
+                OPTIONS_CLASSNAME = "gcb-mcq-choice"
+                OTIONS_DIV_CLASSNAME = "qt-choices"
+                all_questions_divs = browser.find_elements(By.CLASS_NAME, QUESTION_CLASSNAME)
+                for itr, question in enumerate(all_questions_divs):      
+                    try:          
+                        options_div = question.find_element(By.CLASS_NAME, OTIONS_DIV_CLASSNAME).find_elements(By.CLASS_NAME, OPTIONS_CLASSNAME)
+                    # Check if input Type is : 1. radio  2. checkbox  3. text(not)
+                        option_input = options_div[0].find_element(By.TAG_NAME, "input")
+                        input_attribute = option_input.get_attribute("type")
+                        # print(f"Type = {input_attribute}")
+                        if  input_attribute == "radio":
+                            # print(f"KEY: {quiz}")
+                            weeks_answers = course_details["answers"][quiz]
+                            # print(weeks_answers)
+                            ans = answer_options_to_number[weeks_answers[str(itr)]]
+                            input_option = options_div[ans]
+                            print(f"ans: {ans} | input_option : {input_option}")
+                            input_option.find_element(By.TAG_NAME, "input").click()
+                            scroll_origin = ScrollOrigin.from_element(question, 100)
+                            actions.scroll_from_origin(scroll_origin, 0, 1000).perform()
+                        else :
+                            print(input_attribute)
+                    except Exception as e:
+                        print(e)
+                        
 
-
-        
 
     except Exception as e:
         print(e)
